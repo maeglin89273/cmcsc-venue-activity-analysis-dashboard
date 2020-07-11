@@ -3,9 +3,9 @@ from functools import partial
 
 from bokeh.application.handlers import Handler
 from bokeh.layouts import row, gridplot
-from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.models import ColumnDataSource, HoverTool, CrosshairTool, Legend, LegendItem
 from bokeh.plotting import figure
-
+from bokeh.palettes import brewer
 from data_fetcher import DataFetcher
 
 
@@ -34,11 +34,12 @@ class LiveStreamingHandler(Handler):
                              title='Live',
                              x_axis_type='datetime')
 
-        live_figure.line(x='index', y='swimming_pool', source=cds, line_color='green')
+        live_figure.line(x='index', y=INTEREST_COLUMNS[0], source=cds, line_color='green', line_width=2)
         hover_tool = HoverTool(tooltips=TOOLTIPS,
                                formatters=FORMATTERS,
                                mode='vline')
-        live_figure.add_tools(hover_tool)
+        cross_hair_tool = CrosshairTool(dimensions='height')
+        live_figure.add_tools(hover_tool, cross_hair_tool)
         return live_figure
 
 
@@ -47,7 +48,7 @@ class LiveStreamingHandler(Handler):
                              active_scroll='wheel_zoom',
                              # title=title,
                              x_axis_type='datetime')
-        fig.line(x='index', y='swimming_pool', source=cds)
+        fig.line(x='index', y=INTEREST_COLUMNS[0], source=cds)
         hover_tool = HoverTool(tooltips=TOOLTIPS,
                                formatters=FORMATTERS,
                                mode='vline')
@@ -58,6 +59,33 @@ class LiveStreamingHandler(Handler):
             x_range = fig.x_range
 
         return fig, x_range
+
+    def build_week_figure(self, week_cds_list):
+        week_figure = figure(width_policy='max',
+                             height_policy='max',
+                             title='Last Week',
+                             tools='pan,wheel_zoom',
+                             active_scroll='wheel_zoom',
+                             x_axis_type='datetime')
+
+        hover_tool = HoverTool(tooltips=TOOLTIPS,
+                               formatters=FORMATTERS,
+                               mode='vline')
+        cross_hair_tool = CrosshairTool(dimensions='height')
+        week_figure.add_tools(hover_tool, cross_hair_tool)
+        weekday_palette = brewer['Blues'][9]
+        weekend_palette = brewer['OrRd'][5]
+
+
+        for i, (legend_label, day_cds) in enumerate(zip(WEEK_DAYS, week_cds_list)):
+            color = weekday_palette[i] if i < 5 else weekend_palette[i - 5]
+            week_figure.line(x='index', y=INTEREST_COLUMNS[0], source=day_cds, line_width=2, color=color, legend_label=legend_label)
+
+        week_figure.legend.location = 'top_right'
+        week_figure.legend.orientation = 'horizontal'
+        week_figure.legend.click_policy = 'hide'
+
+        return week_figure
 
 
     def build_week_figures(self, cds_list, start, end):
@@ -91,6 +119,8 @@ class LiveStreamingHandler(Handler):
             if sample_week_datetime is None and len(df.index) > 0:
                 sample_week_datetime = df.index[0]
 
+
+
         if sample_week_datetime is None:
             sample_week_datetime = datetime.now()
 
@@ -101,6 +131,8 @@ class LiveStreamingHandler(Handler):
         return week_cds_list, begin_datetime, end_datetime
 
 
+
+
     def modify_document(self, doc):
 
 
@@ -108,9 +140,12 @@ class LiveStreamingHandler(Handler):
 
             live_figure.y_range.start = 0
             live_figure.y_range.end = y_max
-            for fig in day_figures:
-                fig.y_range.start = 0
-                fig.y_range.end = y_max
+
+            week_figure.y_range.start = live_figure.y_range.start
+            week_figure.y_range.end = live_figure.y_range.end
+            # for fig in day_figures:
+            #     fig.y_range.start = 0
+            #     fig.y_range.end = y_max
 
             live_figure.x_range.start, live_figure.x_range.end = x_range
 
@@ -142,9 +177,12 @@ class LiveStreamingHandler(Handler):
 
 
         live_figure = self.build_live_figure(live_cds)
-        day_figures = self.build_week_figures(*self.prepare_week_cds_data())
-        grid_day_figs = gridplot(day_figures, ncols=1, plot_height=730 // len(day_figures), plot_width=560, toolbar_location=None)
+        week_cds_list, begin_datetime, end_datetime = self.prepare_week_cds_data()
+        week_figure = self.build_week_figure(week_cds_list)
+        # day_figures = self.build_week_figures(*self.prepare_week_cds_data())
+        # grid_day_figs = gridplot(day_figures, ncols=1, plot_height=730 // len(day_figures), plot_width=560, toolbar_location=None)
 
 
-        doc.add_root(row(grid_day_figs, live_figure))
+        doc.add_root(gridplot([week_figure, live_figure], ncols=1, sizing_mode='stretch_both'))
+
         doc.add_next_tick_callback(fetch_plot_configs)
