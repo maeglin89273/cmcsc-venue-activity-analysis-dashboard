@@ -15,7 +15,7 @@ if __name__ == '__main__':
                         # (r'/sync', ClockSyncHandler, dict(data_queue=data_queue))
                     ],
 
-                    address='0.0.0.0', port=8888, allow_websocket_origin=['localhost:8888', '192.168.0.13:1234'],
+                    address='0.0.0.0', port=4321, allow_websocket_origin=['localhost:4321', '192.168.0.13:4321'],
                     check_unused_sessions_milliseconds=1000, unused_session_lifetime_milliseconds=5000,
                     debug=False)
 
